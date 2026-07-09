@@ -1,0 +1,37 @@
+name: Build and Deploy to Hostinger
+
+on:
+  schedule:
+    # Runs once a day at 06:00 UTC = 10:00 AM Dubai time (UTC+4).
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        run: npm run build
+        env:
+          NEXT_PUBLIC_WORDPRESS_API_URL: ${{ vars.NEXT_PUBLIC_WORDPRESS_API_URL }}
+
+      - name: Deploy out/ to Hostinger via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.HOSTINGER_FTP_SERVER }}
+          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          local-dir: ./out/
+          server-dir: ./public_html/
