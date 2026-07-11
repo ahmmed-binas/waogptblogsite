@@ -67,29 +67,82 @@ export interface Post {
     nodes: CommentNode[];
   };
 }
+// src/lib/graphql-client.ts
+// Changes: res.ok check, timeout via AbortController, backoff between
+// retries, custom User-Agent (Hostinger/Wordfence-style firewalls
+// sometimes rate-limit or block default fetch UAs), and a longer
+// default revalidate window to reduce load on shared PHP-FPM workers.
 
-async function fetchGraphQL(query: string, variables: Record<string, any> = {}) {
-  const attempt = async () => {
-    const res = await fetch(WP_GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
-      next: { revalidate: 60 },
-    });
-    const json = await res.json();
-    if (json.errors) {
-      console.error('GraphQL Errors:', json.errors);
-      throw new Error('Failed to fetch API');
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchGraphQL(
+  query: string,
+  variables: Record<string, any> = {},
+  revalidate = 3600 // was 60 — hourly is plenty for blog content;
+                     // use on-demand revalidation (webhook) for instant updates
+) {
+  const MAX_ATTEMPTS = 3;
+  let lastError: unknown;
+
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000); // 10s cap
+
+    try {
+      const res = await fetch(WP_GRAPHQL_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Some Hostinger security plugins (Wordfence etc.) flag
+          // generic/missing UAs as bot traffic. A named UA is easier
+          // to allowlist if you need to.
+          'User-Agent': 'WAOGPT-NextJS-Bot/1.0',
+        },
+        body: JSON.stringify({ query, variables }),
+        next: { revalidate },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        // Capture the body for real diagnostics — Hostinger often
+        // returns an HTML error/maintenance page here, not JSON.
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(
+          `WPGraphQL HTTP ${res.status} ${res.statusText}: ${bodyText.slice(0, 300)}`
+        );
+      }
+
+      const json = await res.json();
+
+      if (json.errors) {
+        console.error('GraphQL Errors:', json.errors);
+        throw new Error(
+          `WPGraphQL returned errors: ${JSON.stringify(json.errors).slice(0, 300)}`
+        );
+      }
+
+      return json.data;
+    } catch (err) {
+      clearTimeout(timeout);
+      lastError = err;
+      console.warn(
+        `GraphQL request failed (attempt ${i + 1}/${MAX_ATTEMPTS}):`,
+        err
+      );
+
+      if (i < MAX_ATTEMPTS - 1) {
+        // backoff: 500ms, 1500ms — gives Hostinger's PHP-FPM pool
+        // a moment to free up a worker instead of hitting it again instantly
+        await sleep(500 * (i + 1) ** 2);
+      }
     }
-    return json.data;
-  };
-
-  try {
-    return await attempt();
-  } catch (err) {
-    console.warn('GraphQL request failed, retrying once...', err);
-    return await attempt(); // let this one throw for real if it fails again
   }
+
+  throw lastError;
 }
 // 1. Get all posts with optional pagination, category filter, and search
 export async function getPosts(first = 10, after: string | null = null, categorySlug?: string, search?: string) {
