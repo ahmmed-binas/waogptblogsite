@@ -15,7 +15,7 @@ jobs:
       - name: Run deploy.sh on Hostinger
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HOSTINGER_FTP_HOST }}
+          host: 193.203.186.165
           username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
           password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
           port: 65002
