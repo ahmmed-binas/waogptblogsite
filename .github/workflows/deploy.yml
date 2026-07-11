@@ -15,10 +15,10 @@ jobs:
       - name: Run deploy.sh on Hostinger
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HOSTINGER_SSH_HOST }}
-          username: ${{ secrets.HOSTINGER_SSH_USERNAME }}
-          password: ${{ secrets.HOSTINGER_SSH_PASSWORD }}
-          port: 22
+          host: ${{ secrets.HOSTINGER_FTP_HOST }}
+          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          port: 65002
           script_stop: true
           command_timeout: 15m
 
