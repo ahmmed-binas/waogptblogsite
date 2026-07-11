@@ -1,28 +1,32 @@
-name: Deploy to Hostinger FTP
-
+name: Daily Build and Deploy
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
-  push:
-    branches:
-      - main
-
 jobs:
   deploy:
-    name: FTP Upload to Hostinger
+    name: Deploy to Hostinger
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Deploy website files
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Run deploy.sh on Hostinger
+        uses: appleboy/ssh-action@v1.2.0
         with:
-          server: ${{ secrets.HOSTINGER_FTP_SERVER }}
+          host: ${{ secrets.HOSTINGER_FTP_HOST }}
           username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
           password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
-          protocol: ftp
-          port: 21
-          server-dir: public_html/
-          dangerous-clean-slate: false       
+          port: ${{ secrets.HOSTINGER_FTP_PORT }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -Eeuo pipefail
+            echo "Connected to $(hostname)"
+            pwd
+            cd ~/domains/waogpt.com/public_html
+            if [ ! -f deploy.sh ]; then
+              echo "ERROR: deploy.sh not found"
+              exit 1
+            fi
+            chmod +x deploy.sh
+            ./deploy.sh
+            echo "Deployment completed successfully."
