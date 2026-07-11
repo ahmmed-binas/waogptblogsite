@@ -1,32 +1,45 @@
 name: Daily Build and Deploy
+
 on:
   schedule:
     - cron: "0 1 * * *"
   workflow_dispatch:
+
 jobs:
   deploy:
     name: Deploy to Hostinger
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Run deploy.sh on Hostinger
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HOSTINGER_FTP_HOST }}
-          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
-          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
-          port: ${{ secrets.HOSTINGER_FTP_PORT }}
+          host: ${{ secrets.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USERNAME }}
+          password: ${{ secrets.HOSTINGER_SSH_PASSWORD }}
+          port: 22
           script_stop: true
           command_timeout: 15m
+
           script: |
             set -Eeuo pipefail
+
             echo "Connected to $(hostname)"
-            pwd
+
             cd ~/domains/waogpt.com/public_html
+
+            echo "Current directory:"
+            pwd
+
             if [ ! -f deploy.sh ]; then
               echo "ERROR: deploy.sh not found"
               exit 1
             fi
+
             chmod +x deploy.sh
+
+            echo "Running deployment..."
             ./deploy.sh
+
             echo "Deployment completed successfully."
